@@ -13,6 +13,7 @@ const oraq = new Oraq();
 assert.ok(oraq);
 assert.strictEqual(typeof oraq.limit, 'function');
 assert.strictEqual(typeof oraq.quit, 'function');
+assert.strictEqual(typeof oraq.removeJobById, 'function');
 
 /**
  * Coordinator tests

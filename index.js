@@ -140,7 +140,7 @@ class Oraq {
       // remove processing job id and lock key
       await this._client
         .multi()
-        .lrem(this._keyProcessing, 0, jobId)
+        .lrem(this._keyProcessing, 1, jobId)
         .del(`lock:${this._keyProcessing}:${jobId}`)
         .exec();
     }
@@ -166,7 +166,7 @@ class Oraq {
           if (channel.startsWith(start)) {
             const expiredJobId = channel.slice(start.length);
 
-            this._client.lrem(queueKey, 0, expiredJobId)
+            this._client.lrem(queueKey, 1, expiredJobId)
               .then(() => coordinator.setCanRun())
               .catch(console.error);
           }
@@ -188,6 +188,22 @@ class Oraq {
   async quit() {
     await this._subscriber.quit();
     await this._client.quit();
+  }
+
+  /**
+   * Close redis connections
+   *
+   * @param   {string}   jobId
+   * @returns {function}
+   * @private
+   * @memberof Oraq
+   */
+  async removeJobById(jobId) {
+    await this._client
+      .multi()
+      .del(`lock:${this._keyPending}:${jobId}`)
+      .lrem(this._keyPending, 1, jobId)
+      .exec();
   }
 }
 
