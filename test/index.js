@@ -71,7 +71,8 @@ const Coordinator = require('../Coordinator');
   assert.ok(coordinator.canRun, true);
   assert.strictEqual(typeof coordinator.keepAlive, 'function');
   assert.strictEqual(typeof coordinator.stopKeepAlive, 'function');
-  assert.strictEqual(typeof coordinator.setCanRun, 'function');
+  assert.strictEqual(typeof coordinator.wait, 'function');
+  assert.strictEqual(typeof coordinator.stopWait, 'function');
 })();
 
 
