@@ -63,7 +63,7 @@ oraq.limit(
   job,                    // job {function}
   jobOptions = {          // job options {object}
     jobId,                // job id {string} (random string by default)
-    jobData,              // data to pass as an argument to the job {and}
+    jobData,              // data to pass as an argument to the job {any}
     lifo                  // last-in-first-out {boolean} (false by default)
   }
 ).then(jobResult => console.log(jobResult));
