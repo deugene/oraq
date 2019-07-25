@@ -71,7 +71,7 @@ oraq.limit(
 oraq.quit()                  // same as ioredis quit method (used to close redis connection)
   .then(() => console.log('Redis connection is closed'));
 
-oraq.removeJobById('jobId')  // like ioredis quit method (used to close redis connection)
+oraq.removeJobById('jobId')  // remove job from pending queue
   .then(() => console.log('Job is removed'));
 ```
 
