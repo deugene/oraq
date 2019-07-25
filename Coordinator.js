@@ -13,10 +13,14 @@ class Coordinator {
    * @param   {number}   options.concurrency     jobs concurrency
    * @param   {string}   options.keyPending      pending queue key
    * @param   {string}   options.keyProcessing   processing queue key
-   * @param   {string}   options.timeout         job will run after this time (in case of too long previous tasks processing)
+   * @param   {number}   options.timeout         job will run after this time (in case of too long previous tasks processing)
    * @memberof Coordinator
    */
-  constructor({jobId, client, concurrency, keyPending, keyProcessing, timeout} = {}) {
+  constructor(options) {
+    this._validate(options);
+
+    const {jobId, client, concurrency, keyPending, keyProcessing, timeout, lock} = options;
+
     this._jobId = jobId;
     this._keepAliveTimeout = null;
     this._concurrency = concurrency;
@@ -25,8 +29,43 @@ class Coordinator {
     this._keyPending = keyPending;
     this._keyProcessing = keyProcessing;
     this._timeout = timeout;
+    this._lock = lock;
     this._startTime = null;
     this._canRun = new Promise(resolve => this._resolve = resolve);
+  }
+
+  /**
+   * Validate options
+   *
+   * @param   {object}   options
+   * @private
+   * @memberof Coordinator
+   */
+  _validate(options) {
+    if (!options) {
+      throw new Error('options are required');
+    }
+    if (typeof options.jobId !== 'string') {
+      throw new Error('jobId must be a string');
+    }
+    if (typeof options.keyPending !== 'string') {
+      throw new Error('keyPending must be a string');
+    }
+    if (typeof options.keyProcessing !== 'string') {
+      throw new Error('keyProcessing must be a string');
+    }
+    if (typeof options.lock !== 'string') {
+      throw new Error('lock must be a string');
+    }
+    if (!Number.isInteger(options.concurrency)) {
+      throw new Error('concurrency must be an integer');
+    }
+    if (!Number.isInteger(options.timeout)) {
+      throw new Error('timeout must be an integer');
+    }
+    if (!options.client) {
+      throw new Error('client is required');
+    }
   }
 
   get canRun() {
@@ -36,14 +75,15 @@ class Coordinator {
   /**
    * Keep lock key alive
    *
-   * @param   {string}   lockKey
    * @param   {number}   ms
    * @memberof Coordinator
    */
-  async keepAlive(lockKey, ms) {
+  async keepAlive(ms) {
+    const lockKey = `${this._keyProcessing}:${this._jobId}${this._lock}`;
+
     this.stopKeepAlive();
     await this._client.setex(lockKey, ms * 2 / 1000, '').catch(() => null);
-    this._keepAliveTimeout = setTimeout(() => this.keepAlive(lockKey, ms), ms);
+    this._keepAliveTimeout = setTimeout(() => this.keepAlive(ms), ms);
   }
 
   /**
@@ -106,7 +146,7 @@ class Coordinator {
 
     for (const jobId of jobIds) {
       if (jobId) {
-        const existing = await this._client.exists(`lock:${queueKey}:${jobId}`);
+        const existing = await this._client.exists(`${queueKey}:${jobId}${this._lock}`);
 
         if (!existing) {
           stuckJobs.add(jobId);

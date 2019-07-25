@@ -42,6 +42,8 @@ class Oraq {
     this._key = [prefix, id].join(':');
     this._keyProcessing = this._key + ':processing';
     this._keyPending = this._key + ':pending';
+    // lock key suffix
+    this._lock = ':lock';
     // redis client
     this._client = new Redis(connection);
     // enable namespace events
@@ -63,15 +65,9 @@ class Oraq {
         this._subscriber.psubscribe(`__keyspace@0__:${this._key}:*`, err => {
           if (err) {
             reject(err);
+          } else {
+            resolve();
           }
-
-          this._subscriber.psubscribe(`__keyspace@0__:lock:${this._key}:*`, err => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          });
         });
       });
     }
@@ -102,7 +98,8 @@ class Oraq {
       concurrency: this._concurrency,
       keyPending: this._keyPending,
       keyProcessing: this._keyProcessing,
-      timeout: this._timeout
+      timeout: this._timeout,
+      lock: this._lock
     });
     const onKeyEvent = this._getOnKeyEvent(coordinator);
 
@@ -112,7 +109,7 @@ class Oraq {
       // add job to the pending queue
       await this._client
         .multi()
-        .setex(`lock:${this._keyPending}:${jobId}`, this._timeout * 2 / 1000, '')
+        .setex(`${this._keyPending}:${jobId}${this._lock}`, this._timeout * 2 / 1000, '')
         [lifo ? 'rpush' : 'lpush'](this._keyPending, jobId)  // eslint-disable-line no-unexpected-multiline
         .exec();
       // listen processing key events
@@ -122,12 +119,12 @@ class Oraq {
       await coordinator.canRun;
       this._subscriber.removeListener('pmessage', onKeyEvent);
       // create lock key and keep it alive
-      await coordinator.keepAlive(`lock:${this._keyProcessing}:${jobId}`, this._ping);
+      await coordinator.keepAlive(this._ping);
       // move job from pending to processing queue
       await this._client
         .multi()
         .brpoplpush(this._keyPending, this._keyProcessing, 0)
-        .del(`lock:${this._keyPending}:${jobId}`)
+        .del(`${this._keyPending}:${jobId}${this._lock}`)
         .exec();
       // run job
       result = await job(jobData);
@@ -141,7 +138,7 @@ class Oraq {
       await this._client
         .multi()
         .lrem(this._keyProcessing, 1, jobId)
-        .del(`lock:${this._keyProcessing}:${jobId}`)
+        .del(`${this._keyProcessing}:${jobId}${this._lock}`)
         .exec();
     }
   }
@@ -156,22 +153,19 @@ class Oraq {
    */
   _getOnKeyEvent(coordinator) {
     return (pattern, channel, message) => {
-      const lockStart = '__keyspace@0__:lock:';
-      const queueStart = `__keyspace@0__:${this._key}`;
-
-      if (message === 'expired' && channel.startsWith(lockStart)) {
+      if (message === 'expired' && channel.endsWith(this._lock)) {
         for (const queueKey of [this._keyPending, this._keyProcessing]) {
-          const start = `${lockStart}${queueKey}:`;
+          const queueStart = `__keyspace@0__:${queueKey}:`;
 
-          if (channel.startsWith(start)) {
-            const expiredJobId = channel.slice(start.length);
+          if (channel.startsWith(queueStart)) {
+            const expiredJobId = channel.slice(queueStart.length, -this._lock.length);
 
             this._client.lrem(queueKey, 1, expiredJobId)
               .then(() => coordinator.setCanRun())
               .catch(console.error);
           }
         }
-      } else if (['rpop', 'lrem'].includes(message) && channel.startsWith(queueStart)) {
+      } else if (['rpop', 'lrem'].includes(message)) {
         coordinator.setCanRun().catch(console.error);
       }
     };
@@ -201,7 +195,7 @@ class Oraq {
   async removeJobById(jobId) {
     await this._client
       .multi()
-      .del(`lock:${this._keyPending}:${jobId}`)
+      .del(`${this._keyPending}:${jobId}${this._lock}`)
       .lrem(this._keyPending, 1, jobId)
       .exec();
   }
