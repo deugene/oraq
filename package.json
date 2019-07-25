@@ -1,0 +1,36 @@
+{
+  "name": "oraq",
+  "version": "0.1.0",
+  "description": "Ordered redis asynchronous queue",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test node ./test/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deugene/oraq.git"
+  },
+  "keywords": [
+    "queue",
+    "limiter",
+    "pool",
+    "redis",
+    "job",
+    "task"
+  ],
+  "author": "Yevhen Samoilenko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/deugene/oraq/issues"
+  },
+  "homepage": "https://github.com/deugene/oraq#readme",
+  "dependencies": {
+    "ioredis": "^4.11.2"
+  },
+  "devDependencies": {
+    "eslint": "^6.1.0"
+  }
+}
