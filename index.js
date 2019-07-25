@@ -109,15 +109,16 @@ class Oraq {
       // add job to the pending queue
       await this._client
         .multi()
-        .setex(`${this._keyPending}:${jobId}${this._lock}`, this._timeout * 2 / 1000, '')
+        .setex(`${this._keyPending}:${jobId}${this._lock}`, this._timeout * 1.5 / 1000, '')
         [lifo ? 'rpush' : 'lpush'](this._keyPending, jobId)  // eslint-disable-line no-unexpected-multiline
         .exec();
       // listen processing key events
       this._subscriber.addListener('pmessage', onKeyEvent);
       // concurrency
-      await coordinator.setCanRun();
+      await coordinator.wait(this._ping);
       await coordinator.canRun;
       this._subscriber.removeListener('pmessage', onKeyEvent);
+      coordinator.stopWait();
       // create lock key and keep it alive
       await coordinator.keepAlive(this._ping);
       // move job from pending to processing queue
@@ -133,6 +134,7 @@ class Oraq {
     } finally {
       // stop all timers and remove all listeners
       coordinator.stopKeepAlive();
+      coordinator.stopWait();
       this._subscriber.removeListener('pmessage', onKeyEvent);
       // remove processing job id and lock key
       await this._client
@@ -161,12 +163,12 @@ class Oraq {
             const expiredJobId = channel.slice(queueStart.length, -this._lock.length);
 
             this._client.lrem(queueKey, 1, expiredJobId)
-              .then(() => coordinator.setCanRun())
+              .then(() => coordinator.wait(this._ping))
               .catch(console.error);
           }
         }
       } else if (['rpop', 'lrem'].includes(message)) {
-        coordinator.setCanRun().catch(console.error);
+        coordinator.wait(this._ping).catch(console.error);
       }
     };
   }
@@ -174,26 +176,23 @@ class Oraq {
   /**
    * Close redis connections
    *
-   * @param   {object}   coordinator
-   * @returns {function}
-   * @private
+   * @returns {Promise}
    * @memberof Oraq
    */
   async quit() {
     await this._subscriber.quit();
-    await this._client.quit();
+    return this._client.quit();
   }
 
   /**
    * Close redis connections
    *
    * @param   {string}   jobId
-   * @returns {function}
-   * @private
+   * @returns {Promise}
    * @memberof Oraq
    */
   async removeJobById(jobId) {
-    await this._client
+    return this._client
       .multi()
       .del(`${this._keyPending}:${jobId}${this._lock}`)
       .lrem(this._keyPending, 1, jobId)

@@ -23,6 +23,7 @@ class Coordinator {
 
     this._jobId = jobId;
     this._keepAliveTimeout = null;
+    this._waitTimeout = null;
     this._concurrency = concurrency;
     this._client = client;
     this._resolve = null;
@@ -99,11 +100,36 @@ class Coordinator {
   }
 
   /**
-   * Check if job can run and fulfill canRun promise
+   * Wait for queue changes
+   *
+   * @param   {number}   ms
+   * @memberof Coordinator
+   */
+  async wait(ms) {
+    this.stopWait();
+    await this._setCanRun();
+    this._waitTimeout = setTimeout(() => this.wait(ms), ms);
+  }
+
+  /**
+   * Clear wait timeout
    *
    * @memberof Coordinator
    */
-  async setCanRun() {
+  stopWait() {
+    if (this._waitTimeout) {
+      clearTimeout(this._waitTimeout);
+      this._waitTimeout = null;
+    }
+  }
+
+  /**
+   * Check if job can run and fulfill canRun promise
+   *
+   * @private
+   * @memberof Coordinator
+   */
+  async _setCanRun() {
     if (!this._startTime) {
       this._startTime = Date.now();
     }
