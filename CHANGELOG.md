@@ -11,6 +11,7 @@ All notable changes are documented in this file.
 ### Changed
 
 - lock keys format
+- improve coordinator logic
 
 ## 0.2.0
 
