@@ -23,6 +23,7 @@ class Oraq {
    * @param   {number}   options.concurrency   jobs concurrency
    * @param   {number}   options.ping          processing job keep alive interval
    * @param   {number}   options.timeout       job will run after this time (in case of too long previous tasks processing)
+   * @param   {string}   options.mode          mode {string} ('limiter' - rate limiter (no order guarantee); 'queue' - real queue (keep order))
    * @memberof Oraq
    */
   constructor(options) {
@@ -32,9 +33,11 @@ class Oraq {
       connection,
       ping = 60 * 1000,              // 1 minute
       timeout = 2 * 60 * 60 * 1000,  // 2 hours
-      concurrency = 1
+      concurrency = 1,
+      mode = 'queue'
     } = options || {};
 
+    this._mode = mode;
     this._ping = ping;
     this._timeout = timeout;
     this._concurrency = concurrency;
@@ -99,7 +102,8 @@ class Oraq {
       keyPending: this._keyPending,
       keyProcessing: this._keyProcessing,
       timeout: this._timeout,
-      lock: this._lock
+      lock: this._lock,
+      mode: this._mode
     });
     const onKeyEvent = this._getOnKeyEvent(coordinator);
 
@@ -121,12 +125,23 @@ class Oraq {
       coordinator.stopWait();
       // create lock key and keep it alive
       await coordinator.keepAlive(this._ping);
+
       // move job from pending to processing queue
-      await this._client
-        .multi()
-        .brpoplpush(this._keyPending, this._keyProcessing, 0)
-        .del(`${this._keyPending}:${jobId}${this._lock}`)
-        .exec();
+      const pipe = this._client.multi();
+
+      switch (this._mode) {
+        case 'limiter':
+          pipe.lrem(this._keyPending, 1, jobId);
+          pipe.lpush(this._keyProcessing, jobId);
+          break;
+        case 'queue':
+          pipe.brpoplpush(this._keyPending, this._keyProcessing, 0);
+          break;
+      }
+
+      pipe.del(`${this._keyPending}:${jobId}${this._lock}`);
+      await pipe.exec();
+
       // run job
       result = await job(jobData);
 

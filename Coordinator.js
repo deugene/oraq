@@ -14,12 +14,13 @@ class Coordinator {
    * @param   {string}   options.keyPending      pending queue key
    * @param   {string}   options.keyProcessing   processing queue key
    * @param   {number}   options.timeout         job will run after this time (in case of too long previous tasks processing)
+   * @param   {string}   options.mode            mode {string} ('limiter' - rate limiter (no order guarantee); 'queue' - real queue (keep order))
    * @memberof Coordinator
    */
   constructor(options) {
     this._validate(options);
 
-    const {jobId, client, concurrency, keyPending, keyProcessing, timeout, lock} = options;
+    const {jobId, client, concurrency, keyPending, keyProcessing, timeout, lock, mode} = options;
 
     this._jobId = jobId;
     this._keepAliveTimeout = null;
@@ -31,6 +32,7 @@ class Coordinator {
     this._keyProcessing = keyProcessing;
     this._timeout = timeout;
     this._lock = lock;
+    this._mode = mode;
     this._startTime = null;
     this._canRun = new Promise(resolve => this._resolve = resolve);
   }
@@ -149,8 +151,15 @@ class Coordinator {
     const processingCount = llenRes[1];
     const nextJobId = lindexRes[1];
 
-    if (processingCount < this._concurrency && nextJobId === this._jobId) {
-      this._resolve();
+    if (processingCount < this._concurrency) {
+      switch (this._mode) {
+        case 'limiter':
+          this._resolve();
+          break;
+        case 'queue':
+          nextJobId === this._jobId && this._resolve();
+          break;
+      }
     }
   }
 
