@@ -2,6 +2,12 @@
 
 All notable changes are documented in this file.
 
+## 0.2.3
+
+### Added
+
+- mode option
+
 ## 0.2.2
 
 ### Added

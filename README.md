@@ -50,7 +50,8 @@ const oraq = new Oraq({
   connection,                // redis connection param {any} (anything that ioredis constructor supports)
   ping,                      // processing job keep alive interval in ms {integer} (60000 by default)
   timeout,                   // job will run after this time {integer} (in case of too long previous tasks processing, 2 * 60 * 60 * 1000 (2 hours) by default)
-  concurrency                // jobs concurrency {integer} (1 by default)
+  concurrency,               // jobs concurrency {integer} (1 by default)
+  mode                       // mode {string} ("limiter" - rate limiter (no order guarantee) or "queue" - real queue (keep order), "queue" by default)
 });
 ```
 
