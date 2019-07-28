@@ -65,7 +65,7 @@ class Oraq {
   async _init() {
     if (this._ready === null) {
       this._ready = new Promise((resolve, reject) => {
-        this._subscriber.psubscribe(`__keyspace@0__:${this._key}:*`, err => {
+        this._subscriber.psubscribe(`__keyspace@0__:${this._key}*`, err => {
           if (err) {
             reject(err);
           } else {
@@ -125,23 +125,12 @@ class Oraq {
       coordinator.stopWait();
       // create lock key and keep it alive
       await coordinator.keepAlive(this._ping);
-
       // move job from pending to processing queue
-      const pipe = this._client.multi();
-
-      switch (this._mode) {
-        case 'limiter':
-          pipe.lrem(this._keyPending, 1, jobId);
-          pipe.lpush(this._keyProcessing, jobId);
-          break;
-        case 'queue':
-          pipe.brpoplpush(this._keyPending, this._keyProcessing, 0);
-          break;
-      }
-
-      pipe.del(`${this._keyPending}:${jobId}${this._lock}`);
-      await pipe.exec();
-
+      await this._client.multi()
+        .lrem(this._keyPending, 1, jobId)
+        .lpush(this._keyProcessing, jobId)
+        .del(`${this._keyPending}:${jobId}${this._lock}`)
+        .exec();
       // run job
       result = await job(jobData);
 
@@ -177,12 +166,10 @@ class Oraq {
           if (channel.startsWith(queueStart)) {
             const expiredJobId = channel.slice(queueStart.length, -this._lock.length);
 
-            this._client.lrem(queueKey, 1, expiredJobId)
-              .then(() => coordinator.wait(this._ping))
-              .catch(console.error);
+            this._client.lrem(queueKey, 1, expiredJobId).catch(console.error);
           }
         }
-      } else if (['rpop', 'lrem'].includes(message)) {
+      } else if (message === 'lrem') {
         coordinator.wait(this._ping).catch(console.error);
       }
     };

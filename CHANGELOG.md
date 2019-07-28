@@ -2,6 +2,10 @@
 
 All notable changes are documented in this file.
 
+## 0.2.4
+
+- keyevent listener fix
+
 ## 0.2.3
 
 ### Added
