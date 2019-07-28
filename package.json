@@ -1,6 +1,6 @@
 {
   "name": "oraq",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Ordered redis asynchronous queue",
   "main": "index.js",
   "directories": {
